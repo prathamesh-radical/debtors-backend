@@ -55,7 +55,6 @@ const sendOTPEmail = async (email, otp, userName) => {
         return false;
     }
 };
-
 const Register = async (req, res) => {
     const { firstName, lastName, email, password } = req.body;
 

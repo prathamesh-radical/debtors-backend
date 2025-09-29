@@ -44,7 +44,7 @@ const CreateLoaned = async (req, res) => {
 
 const GetLoanedData = async (req, res) => {
     const { userId } = req.params;
-
+    
     if (userId != req.userId) {
         return res.status(403).json({ message: 'Unauthorized: User ID mismatch' });
     }

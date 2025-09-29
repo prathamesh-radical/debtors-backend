@@ -3,10 +3,9 @@ import db from "../db/DbConnect.js";
 const UpdateUserStatus = async (req, res) => {
     const userId = req.params.id;
     console.log(req.params);
-
+    
     const { is_active } = req.body;
     console.log(req.body);
-
 
     try {
         await db.promise().query('UPDATE users SET is_active = ? WHERE id = ?', [is_active, userId]);
@@ -15,7 +14,6 @@ const UpdateUserStatus = async (req, res) => {
         return res.status(500).json({ error: 'Failed to update status', success: false });
     }
 }
-
 
 const UpdateReport = async (req, res) => {
     try {
@@ -40,5 +38,6 @@ const UpdateReport = async (req, res) => {
         res.status(500).json({ message: "Something went wrong", error, success: false });
     }
 };
+
 export { UpdateUserStatus, UpdateReport };
 
