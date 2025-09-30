@@ -10,8 +10,8 @@ const createTransporter = () => {
     return nodemailer.createTransport({
         service: 'gmail',
         auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS
+            user: "nimjeprathamesh1@gmail.com",
+            pass: "rdhopumfwkfttzyp",
         }
     });
 };
@@ -24,7 +24,7 @@ const sendOTPEmail = async (email, otp, userName) => {
     const transporter = createTransporter();
 
     const mailOptions = {
-        from: process.env.EMAIL_USER,
+        from: "nimjeprathamesh1@gmail.com",
         to: email,
         subject: 'Password Reset OTP - Debtors App',
         html: `
