@@ -8,11 +8,19 @@ dotenv.config();
 
 const createTransporter = () => {
     return nodemailer.createTransport({
-        service: 'gmail',
+        host: process.env.SMTP_HOST,
+        port: parseInt(process.env.SMTP_PORT, 10),
+        secure: process.env.SMTP_SECURE === 'true',
         auth: {
-            user: "nimjeprathamesh1@gmail.com",
-            pass: "rdhopumfwkfttzyp",
-        }
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS
+        },
+        tls: {
+            rejectUnauthorized: false,
+            minVersion: 'TLSv1.2'
+        },
+        debug: true,
+        logger: true,
     });
 };
 
@@ -24,7 +32,7 @@ const sendOTPEmail = async (email, otp, userName) => {
     const transporter = createTransporter();
 
     const mailOptions = {
-        from: "nimjeprathamesh1@gmail.com",
+        from: process.env.EMAIL_USER,
         to: email,
         subject: 'Password Reset OTP - Debtors App',
         html: `
