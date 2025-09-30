@@ -7,14 +7,6 @@ import db from "../db/DbConnect.js";
 dotenv.config();
 
 const createTransporter = () => {
-    console.log({
-        SMTP_HOST: process.env.SMTP_HOST,
-        SMTP_PORT: parseInt(process.env.SMTP_PORT, 10),
-        SMTP_SECURE: process.env.SMTP_SECURE === 'true',
-        EMAIL_USER: process.env.EMAIL_USER,
-        EMAIL_PASS: process.env.EMAIL_PASS
-    });
-
     return nodemailer.createTransport({
         host: process.env.SMTP_HOST,
         port: process.env.SMTP_PORT,
