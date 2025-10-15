@@ -8,19 +8,9 @@ dotenv.config();
 
 const createTransporter = () => {
     return nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT, 10),
-        secure: process.env.SMTP_SECURE === 'true',
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS
-        },
-        tls: {
-            rejectUnauthorized: false,
-            minVersion: 'TLSv1.2'
-        },
-        debug: true,
-        logger: true,
+        service: 'gmail',
+        auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+        pool: true,
     });
 };
 
