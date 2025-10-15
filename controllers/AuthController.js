@@ -21,6 +21,9 @@ const createTransporter = () => {
         },
         debug: true,
         logger: true,
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 10000
     });
 };
 
