@@ -230,7 +230,7 @@ const VerifyOTP = (req, res) => {
                 [email],
                 (updateErr) => {
                     if (updateErr) {
-                        console.error("Error clearing OTP:", updateErr);
+                        console.log("Error clearing OTP:", updateErr);
                     }
                 }
             );
@@ -247,6 +247,7 @@ const VerifyOTP = (req, res) => {
             });
         });
     } catch (error) {
+        console.log("Error verifying OTP:", error);
         return res.status(500).json({ message: "Internal Server error", success: false });
     }
 };
