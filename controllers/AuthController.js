@@ -201,6 +201,7 @@ const VerifyOTP = (req, res) => {
     const { email, otp } = req.body;
 
     if (!email || !otp) {
+        console.log('Missing email or OTP:', { email, otp });
         return res.status(400).json({ message: "Email and OTP are required", success: false });
     }
 
@@ -212,16 +213,33 @@ const VerifyOTP = (req, res) => {
             }
 
             if (results.length === 0) {
+                console.log('User not found for email:', email);
                 return res.status(401).json({ message: "User not found", success: false });
             }
 
             const user = results[0];
+            console.log('User found:', {
+                email: user.email,
+                storedOTP: user.otp,
+                providedOTP: otp,
+                otpExpiry: user.otp_expiry,
+                currentTime: new Date().toISOString()
+            });
 
             if (user.otp !== otp) {
+                console.log('OTP mismatch:', { storedOTP: user.otp, providedOTP: otp });
                 return res.status(400).json({ message: "Invalid OTP", success: false });
             }
 
-            if (new Date() > new Date(user.otp_expiry)) {
+            const currentTime = new Date();
+            const expiryTime = new Date(user.otp_expiry);
+            console.log('Time comparison:', {
+                currentTime: currentTime.toISOString(),
+                expiryTime: expiryTime.toISOString(),
+                isExpired: currentTime > expiryTime
+            });
+
+            if (currentTime > expiryTime) {
                 return res.status(400).json({ message: "OTP has expired", success: false });
             }
 
@@ -230,7 +248,7 @@ const VerifyOTP = (req, res) => {
                 [email],
                 (updateErr) => {
                     if (updateErr) {
-                        console.log("Error clearing OTP:", updateErr);
+                        console.error("Error clearing OTP:", updateErr);
                     }
                 }
             );
@@ -247,7 +265,7 @@ const VerifyOTP = (req, res) => {
             });
         });
     } catch (error) {
-        console.log("Error verifying OTP:", error);
+        console.error("Error verifying OTP:", error);
         return res.status(500).json({ message: "Internal Server error", success: false });
     }
 };
