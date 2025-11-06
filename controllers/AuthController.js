@@ -8,9 +8,13 @@ dotenv.config();
 
 const createTransporter = () => {
     return nodemailer.createTransport({
-        service: 'gmail',
-        auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-        pool: true,
+        host: process.env.SMTP_HOST,
+        port: parseInt(process.env.SMTP_PORT),
+        secure: process.env.SMTP_SECURE === 'true',
+        auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS
+        },
     });
 };
 
@@ -18,12 +22,12 @@ const generateOTP = () => {
     return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-const sendOTPEmail = async (email, otp, userName) => {
+const sendOTPEmail = async (receiverEmail, otp, userName) => {
     const transporter = createTransporter();
 
     const mailOptions = {
         from: process.env.EMAIL_USER,
-        to: email,
+        to: receiverEmail,
         subject: 'Password Reset OTP - Debtors App',
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -46,13 +50,31 @@ const sendOTPEmail = async (email, otp, userName) => {
     };
 
     try {
-        await transporter.sendMail(mailOptions);
+        console.log('🔄 Attempting to send email...');
+        console.log('SMTP Config:', {
+            host: process.env.SMTP_HOST,
+            port: parseInt(process.env.SMTP_PORT),
+            secure: process.env.SMTP_SECURE,
+            user: process.env.EMAIL_USER
+        });
+        
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`✅ OTP email sent successfully to ${receiverEmail}`);
+        console.log('Message ID:', info.messageId);
+        console.log('Response:', info.response);
         return true;
     } catch (error) {
-        console.error('Email sending error:', error);
+        console.error('❌ Email sending error:', error);
+        console.error('Error details:', {
+            code: error.code,
+            command: error.command,
+            response: error.response,
+            responseCode: error.responseCode
+        });
         return false;
     }
 };
+
 const Register = async (req, res) => {
     const { firstName, lastName, email, password } = req.body;
 
