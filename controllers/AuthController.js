@@ -6,8 +6,14 @@ import db from "../db/DbConnect.js";
 
 dotenv.config();
 
+let cachedTransporter = null;
+
 const createTransporter = () => {
-    return nodemailer.createTransport({
+    if (cachedTransporter) return cachedTransporter;
+
+    // Use pooling and reuse the transporter to reduce connection overhead
+    cachedTransporter = nodemailer.createTransport({
+        pool: true,
         host: process.env.SMTP_HOST,
         port: parseInt(process.env.SMTP_PORT),
         secure: process.env.SMTP_SECURE === 'true',
@@ -15,7 +21,22 @@ const createTransporter = () => {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_PASS
         },
+        // optional tuning to speed up typical SMTP servers
+        maxConnections: 5,
+        maxMessages: 100,
+        tls: {
+            rejectUnauthorized: false
+        }
     });
+
+    // verify once at startup (non-blocking)
+    cachedTransporter.verify().then(() => {
+        console.log('✅ SMTP transporter verified');
+    }).catch((err) => {
+        console.warn('⚠️ SMTP verify failed (will still attempt to send):', err && err.message ? err.message : err);
+    });
+
+    return cachedTransporter;
 };
 
 const generateOTP = () => {
@@ -50,28 +71,11 @@ const sendOTPEmail = async (receiverEmail, otp, userName) => {
     };
 
     try {
-        console.log('🔄 Attempting to send email...');
-        console.log('SMTP Config:', {
-            host: process.env.SMTP_HOST,
-            port: parseInt(process.env.SMTP_PORT),
-            secure: process.env.SMTP_SECURE,
-            user: process.env.EMAIL_USER
-        });
-        
-        const info = await transporter.sendMail(mailOptions);
-        console.log(`✅ OTP email sent successfully to ${receiverEmail}`);
-        console.log('Message ID:', info.messageId);
-        console.log('Response:', info.response);
-        return true;
+        // return the promise so caller can optionally handle it; don't block if caller doesn't await
+        return transporter.sendMail(mailOptions);
     } catch (error) {
-        console.error('❌ Email sending error:', error);
-        console.error('Error details:', {
-            code: error.code,
-            command: error.command,
-            response: error.response,
-            responseCode: error.responseCode
-        });
-        return false;
+        console.error('❌ Email sending error (sendOTPEmail):', error);
+        throw error;
     }
 };
 
@@ -168,27 +172,32 @@ const EmailVerify = (req, res) => {
             db.query(
                 "UPDATE users SET otp = ?, otp_expiry = ? WHERE email = ?",
                 [otp, otpExpiry, email],
-                async (updateErr, updateResults) => {
+                (updateErr, updateResults) => {
                     if (updateErr) {
                         return res.status(500).json({ message: "Database error", success: false });
                     }
 
-                    const emailSent = await sendOTPEmail(email, otp, `${user.firstname} ${user.lastname}`);
-
-                    if (emailSent) {
-                        return res.status(200).json({
-                            message: "OTP sent successfully to your email",
-                            success: true,
-                            user: {
-                                id: user.id,
-                                email: user.email,
-                                firstname: user.firstname,
-                                lastname: user.lastname
-                            }
+                    // Send email in background without awaiting — respond to client immediately
+                    sendOTPEmail(email, otp, `${user.firstname} ${user.lastname}`)
+                        .then(info => {
+                            console.log(`✅ OTP email queued/sent to ${email}`, info && info.messageId ? { messageId: info.messageId } : {});
+                        })
+                        .catch(sendErr => {
+                            // log error but do not block the response
+                            console.error(`❌ Failed to send OTP to ${email}:`, sendErr && sendErr.message ? sendErr.message : sendErr);
                         });
-                    } else {
-                        return res.status(500).json({ message: "Failed to send OTP email", success: false });
-                    }
+
+                    // immediate success response
+                    return res.status(200).json({
+                        message: "OTP generated and will be sent to your email shortly",
+                        success: true,
+                        user: {
+                            id: user.id,
+                            email: user.email,
+                            firstname: user.firstname,
+                            lastname: user.lastname
+                        }
+                    });
                 }
             );
         });
