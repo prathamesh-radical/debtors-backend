@@ -52,7 +52,6 @@ const GetLoanedData = async (req, res) => {
     try {
         db.query('SELECT * FROM loaned WHERE user_id = ?', [userId], async (err, result) => {
             if (err) {
-                console.log(err);
                 return res.status(500).json({ message: "Error fetching loaned data", success: false });
             }
 
@@ -86,9 +85,6 @@ const GetSingleLoaned = (req, res) => {
 const UpdateLoaned = async (req, res) => {
     const { id } = req.params;
     const { user_id, ...updateFields } = req.body;
-
-    console.log("my body loaned: ", req.body);
-
 
     if (!id || !user_id || Object.keys(updateFields).length === 0) {
         return res.status(400).json({ message: 'Loan ID, user ID, and at least one field to update are required' });

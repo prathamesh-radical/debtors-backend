@@ -29,13 +29,6 @@ const createTransporter = () => {
         }
     });
 
-    // verify once at startup (non-blocking)
-    cachedTransporter.verify().then(() => {
-        console.log('✅ SMTP transporter verified');
-    }).catch((err) => {
-        console.warn('⚠️ SMTP verify failed (will still attempt to send):', err && err.message ? err.message : err);
-    });
-
     return cachedTransporter;
 };
 
@@ -116,6 +109,7 @@ const Login = async (req, res) => {
     try {
         db.query("SELECT * FROM users WHERE email = ?", [email], async (err, results) => {
             if (err) {
+                console.log("err", err);
                 return res.status(500).json({ message: "Database error", success: false });
             }
 
@@ -138,6 +132,7 @@ const Login = async (req, res) => {
             }
         });
     } catch (error) {
+        console.log("error", error);
         return res.status(500).json({ message: "Internal Server error", success: false });
     }
 };
@@ -178,14 +173,7 @@ const EmailVerify = (req, res) => {
                     }
 
                     // Send email in background without awaiting — respond to client immediately
-                    sendOTPEmail(email, otp, `${user.firstname} ${user.lastname}`)
-                        .then(info => {
-                            console.log(`✅ OTP email queued/sent to ${email}`, info && info.messageId ? { messageId: info.messageId } : {});
-                        })
-                        .catch(sendErr => {
-                            // log error but do not block the response
-                            console.error(`❌ Failed to send OTP to ${email}:`, sendErr && sendErr.message ? sendErr.message : sendErr);
-                        });
+                    sendOTPEmail(email, otp, `${user.firstname} ${user.lastname}`);
 
                     // immediate success response
                     return res.status(200).json({
@@ -210,43 +198,26 @@ const VerifyOTP = (req, res) => {
     const { email, otp } = req.body;
 
     if (!email || !otp) {
-        console.log('Missing email or OTP:', { email, otp });
         return res.status(400).json({ message: "Email and OTP are required", success: false });
     }
 
     try {
         db.query("SELECT * FROM users WHERE email = ?", [email], (err, results) => {
             if (err) {
-                console.error("Error fetching user:", err);
                 return res.status(500).json({ message: "Database error", success: false });
             }
 
             if (results.length === 0) {
-                console.log('User not found for email:', email);
                 return res.status(401).json({ message: "User not found", success: false });
             }
 
             const user = results[0];
-            console.log('User found:', {
-                email: user.email,
-                storedOTP: user.otp,
-                providedOTP: otp,
-                otpExpiry: user.otp_expiry,
-                currentTime: new Date().toISOString()
-            });
-
             if (user.otp !== otp) {
-                console.log('OTP mismatch:', { storedOTP: user.otp, providedOTP: otp });
                 return res.status(400).json({ message: "Invalid OTP", success: false });
             }
 
             const currentTime = new Date();
             const expiryTime = new Date(user.otp_expiry);
-            console.log('Time comparison:', {
-                currentTime: currentTime.toISOString(),
-                expiryTime: expiryTime.toISOString(),
-                isExpired: currentTime > expiryTime
-            });
 
             if (currentTime > expiryTime) {
                 return res.status(400).json({ message: "OTP has expired", success: false });
@@ -274,7 +245,6 @@ const VerifyOTP = (req, res) => {
             });
         });
     } catch (error) {
-        console.error("Error verifying OTP:", error);
         return res.status(500).json({ message: "Internal Server error", success: false });
     }
 };

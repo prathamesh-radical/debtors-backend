@@ -46,9 +46,6 @@ const CreateOwed = async (req, res) => {
 const GetOwedData = async (req, res) => {
     const { userId } = req.params;
 
-    console.log("my id owed: ", typeof userId, typeof req.userId);
-
-
     if (userId != req.userId) {
         return res.status(403).json({ message: 'Unauthorized: User ID mismatch' });
     }
@@ -56,7 +53,6 @@ const GetOwedData = async (req, res) => {
     try {
         db.query('SELECT * FROM owed WHERE user_id = ?', [userId], async (err, result) => {
             if (err) {
-                console.log(err);
                 return res.status(500).json({ message: "Error fetching owed data", success: false });
             }
 

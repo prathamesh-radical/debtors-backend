@@ -13,7 +13,6 @@ const AdminRegister = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         db.query("INSERT INTO admins (admin_id, password) VALUES (?, ?)", [adminId, hashedPassword], (err, result) => {
             if (err) {
-                console.log(err);
                 return res.status(500).json({ message: "Error inserting values", success: false });
             }
             res.status(200).json({ message: "Admin Created", success: true });
@@ -32,7 +31,6 @@ const AdminLogin = async (req, res) => {
     try {
         db.query("SELECT * FROM admins WHERE admin_id = ?", [adminId], async (err, result) => {
             if (err) {
-                console.log(err);
                 return res.status(500).json({ message: "Error fetching values", success: false });
             }
             if (result.length > 0) {
@@ -52,7 +50,6 @@ const AdminLogin = async (req, res) => {
             }
         });
     } catch (err) {
-        console.log(err);
         return res.status(500).json({ message: "Internal server error", success: false });
     }
 }

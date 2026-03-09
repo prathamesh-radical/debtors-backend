@@ -17,9 +17,6 @@ const GetOwedLoanedByContactId = (req, res) => {
     const { contact_id } = req.params;
     const { user_id } = req.query;
 
-    console.log("myid: ", req.params);
-    
-
     if (!contact_id || !user_id) {
         return res.status(400).json({ error: 'contact_id and user_id is required', success: false });
     }
