@@ -322,4 +322,44 @@ const ValidateToken = (req, res) => {
     }
 };
 
-export { Register, Login, EmailVerify, VerifyOTP, ResetPassword, ValidateToken };
+const UpdateSettings = (req, res) => {
+    const { userId, currency, country } = req.body; // 👈 from body directly
+
+    if (!userId) {
+        return res.status(400).json({ message: "User ID is required", success: false });
+    }
+
+    if (!currency && !country) {
+        return res.status(400).json({ message: "At least one field is required", success: false });
+    }
+
+    const fields = [];
+    const values = [];
+
+    if (currency) {
+        fields.push("currency = ?");
+        values.push(currency);
+    }
+    if (country) {
+        fields.push("country = ?");
+        values.push(country);
+    }
+
+    values.push(userId);
+
+    db.query(
+        `UPDATE users SET ${fields.join(", ")} WHERE id = ?`,
+        values,
+        (err, results) => {
+            if (err) {
+                return res.status(500).json({ message: "Database error", success: false });
+            }
+            if (results.affectedRows === 0) {
+                return res.status(404).json({ message: "User not found", success: false });
+            }
+            return res.status(200).json({ message: "Settings updated successfully", success: true });
+        }
+    );
+};
+
+export { Register, Login, EmailVerify, VerifyOTP, ResetPassword, ValidateToken, UpdateSettings };
