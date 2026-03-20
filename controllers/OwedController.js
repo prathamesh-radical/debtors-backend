@@ -20,14 +20,12 @@ const CreateOwed = async (req, res) => {
             [user_id, amount, creditor_name, mobile_number, from_date, due_date, payment_option, note || null, type_of_debt, contact_id],
             (err, results) => {
                 if (err) {
-                    console.error("Error inserting user:", err.message);
                     return res.status(500).json({ message: "Database error", success: false });
                 }
 
                 const updateSql = `UPDATE users SET entries = entries + 1 WHERE id = ?`;
                 db.query(updateSql, [user_id], (updateErr) => {
                     if (updateErr) {
-                        console.error("Error updating entries count:", updateErr.message);
                         return res.status(500).json({ message: "Error updating entries count", success: false });
                     }
 
@@ -37,7 +35,6 @@ const CreateOwed = async (req, res) => {
             }
         );
     } catch (error) {
-        console.error('Error inserting owed record:', error);
         res.status(500).json({ message: 'Internal server error', success: false });
     }
 };
@@ -59,7 +56,6 @@ const GetOwedData = async (req, res) => {
             res.status(200).json({ message: "Owed data fetched successfully", success: true, owedData: result });
         });
     } catch (error) {
-        console.error('Error fetching owed data:', error);
         res.status(500).json({ message: 'Server error', error: error.message, success: false });
     }
 };
@@ -71,7 +67,6 @@ const GetSingleOwed = (req, res) => {
 
     db.query(query, [owedId], (err, results) => {
         if (err) {
-            console.error('Error fetching owed item:', err);
             return res.status(500).json({ message: 'Database error', success });
         }
 
@@ -109,7 +104,6 @@ const UpdateOwed = async (req, res) => {
         const [updatedOwe] = await db.promise().query('SELECT * FROM owed WHERE id = ?', [id]);
         res.status(200).json(updatedOwe);
     } catch (error) {
-        console.error('Error updating owe:', error);
         res.status(500).json({ message: 'Server error' });
     }
 }
@@ -120,7 +114,6 @@ const DeleteOwed = async (req, res) => {
         await db.execute('DELETE FROM owed WHERE id = ?', [owedId]);
         res.json({ message: 'Owed deleted successfully', success: true });
     } catch (error) {
-        console.error('deleteOwed Error:', error);
         res.status(500).json({ message: 'Server Error', success: false });
     }
 }

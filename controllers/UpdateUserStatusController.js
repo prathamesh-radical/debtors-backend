@@ -32,7 +32,6 @@ const UpdateReport = async (req, res) => {
 
         res.status(200).json({ message: "Updates successful", success: true });
     } catch (error) {
-        console.error(error);
         res.status(500).json({ message: "Something went wrong", error, success: false });
     }
 };

@@ -1,7 +1,7 @@
 import db from "../db/DbConnect.js";
 
 const CreateLoaned = async (req, res) => {
-    const { user_id, amount, creditor_name, mobile_number, from_date, due_date, payment_option, note, type_of_debt, contact_id
+    const { user_id, amount, creditor_name, mobile_number, from_date, due_date, payment_option, note, contact_id
     } = req.body;
 
     if (!user_id) {
@@ -12,23 +12,21 @@ const CreateLoaned = async (req, res) => {
         const sql = `
             INSERT INTO loaned (
                 user_id, amount, creditor_name, mobile_number, from_date, due_date,
-                payment_option, note, type_of_debt, contact_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                payment_option, note, contact_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         db.query(
             sql,
-            [user_id, amount, creditor_name, mobile_number, from_date, due_date, payment_option, note || null, type_of_debt, contact_id],
+            [user_id, amount, creditor_name, mobile_number, from_date, due_date, payment_option, note || null, contact_id],
             (err, results) => {
                 if (err) {
-                    console.error("Error inserting loaned:", err.message);
                     return res.status(500).json({ message: "Database error", success: false });
                 }
 
                 const updateSql = `UPDATE users SET entries = entries + 1 WHERE id = ?`;
                 db.query(updateSql, [user_id], (updateErr) => {
                     if (updateErr) {
-                        console.error("Error updating entries count:", updateErr.message);
                         return res.status(500).json({ message: "Error updating entries count", success: false });
                     }
 
@@ -37,7 +35,6 @@ const CreateLoaned = async (req, res) => {
             }
         );
     } catch (error) {
-        console.error('Error inserting loaned record:', error);
         res.status(500).json({ message: 'Internal server error', success: false });
     }
 };
@@ -58,7 +55,6 @@ const GetLoanedData = async (req, res) => {
             res.status(200).json({ message: "Loaned data fetched successfully", success: true, loanedData: result });
         });
     } catch (error) {
-        console.error('Error fetching loaned data:', error);
         res.status(500).json({ message: 'Server error', error: error.message, success: false });
     }
 };
@@ -70,7 +66,6 @@ const GetSingleLoaned = (req, res) => {
 
     db.query(query, [loanedId], (err, results) => {
         if (err) {
-            console.error('Error fetching loaned item:', err);
             return res.status(500).json({ message: 'Database error', success });
         }
 
@@ -107,7 +102,6 @@ const UpdateLoaned = async (req, res) => {
         const [updatedLoan] = await db.promise().query('SELECT * FROM loaned WHERE id = ?', [id]);
         res.status(200).json(updatedLoan);
     } catch (error) {
-        console.error('Error updating loan:', error);
         res.status(500).json({ message: 'Server error' });
     }
 }
@@ -118,7 +112,6 @@ const DeleteLoaned = async (req, res) => {
         await db.execute('DELETE FROM loaned WHERE id = ?', [loanedId]);
         res.json({ message: 'Loaned deleted successfully', success: true });
     } catch (error) {
-        console.error('deleteLoaned Error:', error);
         res.status(500).json({ message: 'Server Error', success: false });
     }
 }
