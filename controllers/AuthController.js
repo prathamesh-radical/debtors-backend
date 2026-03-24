@@ -74,6 +74,81 @@ const GoogleLogin = async (req, res) => {
     }
 };
 
+const FacebookLogin = async (req, res) => {
+    const { accessToken } = req.body;
+
+    if (!accessToken) {
+        return res.status(400).json({ message: 'Access token is required', success: false });
+    }
+
+    try {
+        const fbRes = await fetch(
+            `https://graph.facebook.com/me?fields=id,first_name,last_name,email&access_token=${accessToken}`
+        );
+        const fbData = await fbRes.json();
+
+        if (fbData.error) {
+            console.log('Facebook API error:', fbData);
+            return res.status(401).json({ message: 'Invalid Facebook token', success: false });
+        }
+
+        const { id: facebookId, first_name, last_name, email } = fbData;
+
+        if (!email) {
+            return res.status(400).json({
+                message: 'Email permission not granted. Please allow email access.',
+                success: false
+            });
+        }
+
+        db.query('SELECT * FROM users WHERE email = ?', [email], async (err, results) => {
+            console.log("err", err);
+            if (err) return res.status(500).json({ message: 'Database error', success: false });
+
+            let user;
+
+            if (results.length === 0) {
+                db.query(
+                    'INSERT INTO users (firstname, lastname, email, facebook_id, is_active) VALUES (?, ?, ?, ?, 1)',
+                    [first_name, last_name || '', email, facebookId],
+                    (insertErr, insertResult) => {
+                        console.log("insertErr", insertErr);
+                        if (insertErr) {
+                            return res.status(500).json({ message: 'Failed to create user', success: false });
+                        }
+
+                        user = {
+                            id: insertResult.insertId,
+                            firstname: first_name,
+                            lastname: last_name || '',
+                            email,
+                        };
+
+                        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1d' });
+                        return res.status(201).json({ message: 'Account created', success: true, token, user });
+                    }
+                );
+            } else {
+                user = results[0];
+
+                if (user.is_active === 0) {
+                    return res.status(403).json({ message: 'Account is inactive', success: false });
+                }
+
+                if (!user.facebook_id) {
+                    db.query('UPDATE users SET facebook_id = ? WHERE id = ?', [facebookId, user.id], () => {});
+                }
+
+                const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1d' });
+                return res.status(200).json({ message: 'Login successful', success: true, token, user });
+            }
+        });
+    } catch (error) {
+        console.error('Facebook login error:', error);
+        return res.status(500).json({ message: 'Internal server error', success: false });
+    }
+};
+
 const UpdateSettings = (req, res) => {
     const { userId, currency, country } = req.body;
 
@@ -114,4 +189,4 @@ const UpdateSettings = (req, res) => {
     );
 };
 
-export { GoogleLogin, UpdateSettings };
+export { GoogleLogin, FacebookLogin, UpdateSettings };

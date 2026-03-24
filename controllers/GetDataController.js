@@ -47,11 +47,11 @@ const GetAllContatcs = (req, res) => {
     }
 
     const combinedQuery = `
-        SELECT 'owed' AS type, id, user_id, contact_id, amount, creditor_name, from_date, due_date, payment_option, type_of_debt 
+        SELECT 'owed' AS type, id, user_id, contact_id, amount, creditor_name, mobile_number, from_date, due_date, payment_option, type_of_debt 
         FROM owed 
         WHERE user_id = ?
         UNION ALL
-        SELECT 'loaned' AS type, id, user_id, contact_id, amount, creditor_name, from_date, due_date, payment_option, type_of_debt 
+        SELECT 'loaned' AS type, id, user_id, contact_id, amount, creditor_name, mobile_number, from_date, due_date, payment_option, type_of_debt 
         FROM loaned 
         WHERE user_id = ?
     `;
