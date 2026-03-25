@@ -18,7 +18,7 @@ const CreateLoaned = async (req, res) => {
 
         db.query(
             sql,
-            [user_id, amount, creditor_name, mobile_number, from_date, due_date, payment_option, note || null, contact_id],
+            [user_id, amount, creditor_name, mobile_number, from_date, due_date || null, payment_option, note || null, contact_id],
             (err, results) => {
                 if (err) {
                     return res.status(500).json({ message: "Database error", success: false });

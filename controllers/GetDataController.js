@@ -57,6 +57,7 @@ const GetAllContatcs = (req, res) => {
     `;
 
     db.query(combinedQuery, [user_id, user_id], (err, results) => {
+        console.log("results", results);
         if (err) {
             return res.status(500).json({ error: 'Error fetching data', details: err, success: false });
         }
