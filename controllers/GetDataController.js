@@ -22,11 +22,11 @@ const GetOwedLoanedByContactId = (req, res) => {
     }
 
     const combinedQuery = `
-        SELECT 'owed' AS type, id, user_id, contact_id, amount, creditor_name, from_date, due_date, payment_option, type_of_debt 
+        SELECT 'owed' AS type, id, user_id, contact_id, amount, creditor_name, from_date, due_date, payment_option, note, type_of_debt 
         FROM owed 
         WHERE contact_id = ? AND user_id = ?
         UNION ALL
-        SELECT 'loaned' AS type, id, user_id, contact_id, amount, creditor_name, from_date, due_date, payment_option, type_of_debt 
+        SELECT 'loaned' AS type, id, user_id, contact_id, amount, creditor_name, from_date, due_date, payment_option, note, type_of_debt 
         FROM loaned 
         WHERE contact_id = ? AND user_id = ?
     `;
