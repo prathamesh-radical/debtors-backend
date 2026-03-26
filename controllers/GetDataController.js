@@ -47,17 +47,16 @@ const GetAllContatcs = (req, res) => {
     }
 
     const combinedQuery = `
-        SELECT 'owed' AS type, id, user_id, contact_id, amount, creditor_name, mobile_number, from_date, due_date, payment_option, type_of_debt 
+        SELECT 'owed' AS type, id, user_id, contact_id, amount, creditor_name, mobile_number, from_date, due_date, payment_option, note, type_of_debt 
         FROM owed 
         WHERE user_id = ?
         UNION ALL
-        SELECT 'loaned' AS type, id, user_id, contact_id, amount, creditor_name, mobile_number, from_date, due_date, payment_option, type_of_debt 
+        SELECT 'loaned' AS type, id, user_id, contact_id, amount, creditor_name, mobile_number, from_date, due_date, payment_option, note, type_of_debt 
         FROM loaned 
         WHERE user_id = ?
     `;
 
     db.query(combinedQuery, [user_id, user_id], (err, results) => {
-        console.log("results", results);
         if (err) {
             return res.status(500).json({ error: 'Error fetching data', details: err, success: false });
         }
