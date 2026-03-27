@@ -149,99 +149,6 @@ const FacebookLogin = async (req, res) => {
     }
 };
 
-const RequestPhoneVerification = (req, res) => {
-    const { userId, phone } = req.body;
-
-    if (!userId || !phone)
-        return res.status(400).json({ message: 'userId and phone required', success: false });
-
-    const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
-
-    db.query(
-        'UPDATE users SET phone = ?, verify_token = ?, verify_token_expires = ?, phone_verified = 0 WHERE id = ?',
-        [phone, otp, expiresAt, userId],
-        (err, result) => {
-            if (err) return res.status(500).json({ message: 'Database error', success: false });
-            if (result.affectedRows === 0) return res.status(404).json({ message: 'User not found', success: false });
-
-            return res.status(200).json({ success: true, otp }); // send OTP to frontend
-        }
-    );
-};
-
-const CheckPhoneVerification = (req, res) => {
-    const { userId } = req.query;
-
-    if (!userId)
-        return res.status(400).json({ message: 'userId required', success: false });
-
-    db.query(
-        'SELECT phone_verified FROM users WHERE id = ?',
-        [userId],
-        (err, results) => {
-            if (err) return res.status(500).json({ message: 'Database error', success: false });
-            if (!results.length) return res.status(404).json({ message: 'User not found', success: false });
-
-            return res.status(200).json({
-                success: true,
-                verified: results[0].phone_verified === 1,
-            });
-        }
-    );
-};
-
-// Inbound SMS webhook — called by your SMS provider when SMS arrives
-const SmsInboundWebhook = (req, res) => {
-    const body = (req.body.Body || req.body.message || '').trim().toUpperCase();
-    const parts = body.split(' ');
-
-    if (parts[0] !== 'VERIFY' || !parts[1])
-        return res.sendStatus(200);
-
-    const token = parts[1];
-
-    db.query(
-        'SELECT id FROM users WHERE verify_token = ? AND verify_token_expires > NOW()',
-        [token],
-        (err, results) => {
-            if (err || !results.length) return res.sendStatus(200);
-
-            db.query(
-                'UPDATE users SET phone_verified = 1, verify_token = NULL, verify_token_expires = NULL WHERE id = ?',
-                [results[0].id]
-            );
-            res.sendStatus(200);
-        }
-    );
-};
-
-const VerifyOtp = (req, res) => {
-    const { userId, otp } = req.body;
-
-    if (!userId || !otp)
-        return res.status(400).json({ message: 'userId and otp required', success: false });
-
-    db.query(
-        'SELECT id FROM users WHERE id = ? AND verify_token = ? AND verify_token_expires > NOW()',
-        [userId, otp],
-        (err, results) => {
-            if (err) return res.status(500).json({ message: 'Database error', success: false });
-            if (!results.length)
-                return res.status(400).json({ message: 'Invalid or expired OTP', success: false });
-
-            db.query(
-                'UPDATE users SET phone_verified = 1, verify_token = NULL, verify_token_expires = NULL WHERE id = ?',
-                [userId],
-                (updateErr) => {
-                    if (updateErr) return res.status(500).json({ message: 'Database error', success: false });
-                    return res.status(200).json({ success: true, message: 'Phone verified successfully' });
-                }
-            );
-        }
-    );
-};
-
 const UpdateSettings = (req, res) => {
     const { userId, currency, country, phone } = req.body;
 
@@ -286,4 +193,4 @@ const UpdateSettings = (req, res) => {
     );
 };
 
-export { GoogleLogin, FacebookLogin, UpdateSettings, RequestPhoneVerification, CheckPhoneVerification, SmsInboundWebhook, VerifyOtp };
+export { GoogleLogin, FacebookLogin, UpdateSettings };
