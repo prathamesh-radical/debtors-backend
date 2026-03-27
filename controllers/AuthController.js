@@ -88,7 +88,6 @@ const FacebookLogin = async (req, res) => {
         const fbData = await fbRes.json();
 
         if (fbData.error) {
-            console.log('Facebook API error:', fbData);
             return res.status(401).json({ message: 'Invalid Facebook token', success: false });
         }
 
@@ -102,7 +101,6 @@ const FacebookLogin = async (req, res) => {
         }
 
         db.query('SELECT * FROM users WHERE email = ?', [email], async (err, results) => {
-            console.log("err", err);
             if (err) return res.status(500).json({ message: 'Database error', success: false });
 
             let user;
@@ -112,7 +110,6 @@ const FacebookLogin = async (req, res) => {
                     'INSERT INTO users (firstname, lastname, email, facebook_id, is_active) VALUES (?, ?, ?, ?, 1)',
                     [first_name, last_name || '', email, facebookId],
                     (insertErr, insertResult) => {
-                        console.log("insertErr", insertErr);
                         if (insertErr) {
                             return res.status(500).json({ message: 'Failed to create user', success: false });
                         }
@@ -144,7 +141,6 @@ const FacebookLogin = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Facebook login error:', error);
         return res.status(500).json({ message: 'Internal server error', success: false });
     }
 };
