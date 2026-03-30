@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
 import dotenv from "dotenv";
 import db from "../db/DbConnect.js";
 import { OAuth2Client } from 'google-auth-library';
@@ -6,6 +7,95 @@ import { OAuth2Client } from 'google-auth-library';
 dotenv.config();
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_WEB_CLIENT_ID);
+
+const Registration = async (req, res) => {
+    const { firstname, lastname, email, password, confirmPassword } = req.body;
+
+    const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailPattern.test(email)) {
+        return res.status(400).json({ message: "Please enter a valid email address.", success: false });
+    }
+
+    if (!firstname || !lastname || !email || !password || !confirmPassword) {
+        return res.status(400).json({ message: "All fields are required", success: false });
+    }
+
+    if (password !== confirmPassword) {
+        return res.status(400).json({ message: "Passwords do not match", success: false });
+    }
+
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        db.query("SELECT * FROM users WHERE email = ?", [email], (err, result) => {
+            if (err) {
+                return res.status(500).json({ message: "Error checking user existence", success: false });
+            }
+
+            if (result.length > 0) {
+                return res.status(400).json({ message: "User already exists with this email", success: false });
+            } else {
+                db.query(
+                    "INSERT INTO users (firstname, lastname, email, password) VALUES (?, ?, ?, ?)",
+                    [firstname, lastname, email, hashedPassword],
+                    (err, result) => {
+                        if (err) {
+                            return res.status(500).json({ message: "Error while registering you", success: false });
+                        }
+                        return res.status(200).json({ message: "User Registered Successfully", success: true });
+                    }
+                );
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ message: "Internal Server Error", success: false });
+    }
+};
+
+const Login = async (req, res) => {
+    if (!req.body) {
+        return res.status(400).json({ message: "Request body is required", success: false });
+    }
+
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({ message: "Email and password are required", success: false });
+    }
+
+    try {
+        db.query("SELECT * FROM users WHERE email = ?", [email], async (err, results) => {
+            if (err) {
+                return res.status(500).json({ message: "Database error", success: false });
+            }
+
+            if (results.length === 0) {
+                return res.status(401).json({ message: "Invalid email or password", success: false });
+            }
+
+            const user = results[0];
+
+            const isPasswordValid = await bcrypt.compare(password, user.password);
+            if (!isPasswordValid) {
+                return res.status(401).json({ message: "Invalid email or password", success: false });
+            }
+
+            const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+            const userData = {
+                id: user.id,
+                firstname: user.firstname,
+                lastname: user.lastname,
+                email: user.email,
+                profile_url: user.profile_url,
+            };
+
+            return res.status(200).json({ message: "Login successful", success: true, token, user: userData });
+        });
+    } catch (error) {
+        return res.status(500).json({ message: "Internal Server Error", success: false });
+    }
+};
 
 const GoogleLogin = async (req, res) => {
     const { idToken } = req.body;
@@ -15,10 +105,7 @@ const GoogleLogin = async (req, res) => {
     }
 
     try {
-        const ticket = await googleClient.verifyIdToken({
-            idToken,
-            audience: process.env.GOOGLE_WEB_CLIENT_ID,
-        });
+        const ticket = await googleClient.verifyIdToken({ idToken, audience: process.env.GOOGLE_WEB_CLIENT_ID });
 
         const payload = ticket.getPayload();
         const { email, name, picture, sub: googleId } = payload;
@@ -45,7 +132,7 @@ const GoogleLogin = async (req, res) => {
                             email,
                         };
 
-                        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1d' });
+                        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
                         return res.status(201).json({ message: 'Account created', success: true, token, user });
                     }
                 );
@@ -59,7 +146,7 @@ const GoogleLogin = async (req, res) => {
                     );
                 }
 
-                const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1d' });
+                const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
                 return res.status(200).json({
                     message: 'Login successful',
                     success: true,
@@ -121,7 +208,7 @@ const FacebookLogin = async (req, res) => {
                             email,
                         };
 
-                        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1d' });
+                        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
                         return res.status(201).json({ message: 'Account created', success: true, token, user });
                     }
                 );
@@ -136,7 +223,7 @@ const FacebookLogin = async (req, res) => {
                     db.query('UPDATE users SET facebook_id = ? WHERE id = ?', [facebookId, user.id], () => { });
                 }
 
-                const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1d' });
+                const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
                 return res.status(200).json({ message: 'Login successful', success: true, token, user });
             }
         });
@@ -189,4 +276,41 @@ const UpdateSettings = (req, res) => {
     );
 };
 
-export { GoogleLogin, FacebookLogin, UpdateSettings };
+const SetPassword = (req, res) => {
+    const { userId, password } = req.body;
+
+    if (!password) {
+        return res.status(400).json({ message: "Password is required", success: false });
+    }
+
+    db.query("SELECT password FROM users WHERE id = ?", [userId], async (err, results) => {
+        if (err) {
+            return res.status(500).json({ message: "Database error", success: false });
+        }
+
+        if (results.length === 0) {
+            return res.status(404).json({ message: "User not found", success: false });
+        }
+
+        try {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            db.query("UPDATE users SET password = ? WHERE id = ?", [hashedPassword, userId],
+                (updateErr, updateResults) => {
+                    if (updateErr) {
+                        return res.status(500).json({ message: "Database error", success: false });
+                    }
+
+                    if (updateResults.affectedRows === 0) {
+                        return res.status(404).json({ message: "User not found", success: false });
+                    }
+
+                    return res.status(200).json({ message: "Password updated successfully", success: true });
+                }
+            );
+        } catch (error) {
+            return res.status(500).json({ message: "Error processing password", success: false });
+        }
+    });
+};
+
+export { Registration, Login, GoogleLogin, FacebookLogin, SetPassword, UpdateSettings };
