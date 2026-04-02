@@ -88,6 +88,7 @@ const Login = async (req, res) => {
                 lastname: user.lastname,
                 email: user.email,
                 profile_url: user.profile_url,
+                created_at: user.created_at,
             };
 
             return res.status(200).json({ message: "Login successful", success: true, token, user: userData });
@@ -130,6 +131,7 @@ const GoogleLogin = async (req, res) => {
                             lastname: lastName,
                             profile_url: picture,
                             email,
+                            created_at: user.created_at,
                         };
 
                         const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
@@ -206,6 +208,7 @@ const FacebookLogin = async (req, res) => {
                             firstname: first_name,
                             lastname: last_name || '',
                             email,
+                            created_at: user.created_at,
                         };
 
                         const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
@@ -313,4 +316,59 @@ const SetPassword = (req, res) => {
     });
 };
 
-export { Registration, Login, GoogleLogin, FacebookLogin, SetPassword, UpdateSettings };
+const DeleteAccount = (req, res) => {
+    const { userId } = req.body;
+    console.log("DeleteAccount called with userId:", userId);
+
+    if (!userId) {
+        return res.status(400).json({ message: "User ID is required", success: false });
+    }
+
+    try {
+        // Step 1: Check if user exists
+        db.query("SELECT id FROM users WHERE id = ?", [userId], (checkErr, checkResults) => {
+            if (checkErr) {
+                console.log("error check:", checkErr);
+                return res.status(500).json({ message: "Database error", success: false });
+            }
+
+            if (checkResults.length === 0) {
+                return res.status(404).json({ message: "User not found", success: false });
+            }
+
+            // Step 2: Delete from owed table
+            db.query("DELETE FROM owed WHERE user_id = ?", [userId], (owedErr) => {
+                if (owedErr) {
+                    console.log("error owed:", owedErr);
+                    return res.status(500).json({ message: "Failed to delete owed data", success: false });
+                }
+
+                // Step 3: Delete from loaned table
+                db.query("DELETE FROM loaned WHERE user_id = ?", [userId], (loanedErr) => {
+                    if (loanedErr) {
+                        console.log("error loaned:", loanedErr);
+                        return res.status(500).json({ message: "Failed to delete loaned data", success: false });
+                    }
+
+                    // Step 4: Delete user
+                    db.query("DELETE FROM users WHERE id = ?", [userId], (deleteErr, deleteResults) => {
+                        if (deleteErr) {
+                            console.log("error delete:", deleteErr);
+                            return res.status(500).json({ message: "Failed to delete account", success: false });
+                        }
+
+                        return res.status(200).json({
+                            message: "Account and related data deleted successfully",
+                            success: true
+                        });
+                    });
+                });
+            });
+        });
+    } catch (error) {
+        console.log("error catch:", error);
+        return res.status(500).json({ message: "Internal server error", success: false });
+    };
+};
+
+    export { Registration, Login, GoogleLogin, FacebookLogin, SetPassword, UpdateSettings, DeleteAccount };

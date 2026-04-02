@@ -1,5 +1,6 @@
 import express from 'express';
 import {
+    DeleteAccount,
     FacebookLogin, GoogleLogin, Login, Registration, SetPassword, UpdateSettings
 } from '../controllers/AuthController.js';
 
@@ -12,5 +13,6 @@ AuthRoute.post("/facebook-login", FacebookLogin);
 AuthRoute.put("/update-settings", UpdateSettings);
 AuthRoute.post("/set-password", SetPassword);
 AuthRoute.put("/update-password", SetPassword);
+AuthRoute.delete("/delete-account", DeleteAccount);
 
 export default AuthRoute;
