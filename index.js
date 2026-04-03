@@ -7,7 +7,7 @@ import OwedRoute from './routes/OwedRoutes.js';
 import LoanedRoute from './routes/LoanedRoute.js';
 import GetDataRoute from './routes/GetDataRoute.js';
 import UpdateStatusRoute from './routes/UpdateStatusRoute.js';
-import ContactsRoute from './routes/Contactroute.js';
+import ContactsRoute from './routes/ContactsRoute.js';
 
 dotenv.config();
 
@@ -33,7 +33,6 @@ app.use('/api', ContactsRoute);
 
 app.get('/', (req, res) => {
     res.send('Hello Debtors!');
-    consolre.log("Received request to root endpoint");
 });
 
 app.listen(process.env.PORT || 3000, '0.0.0.0', () => {
