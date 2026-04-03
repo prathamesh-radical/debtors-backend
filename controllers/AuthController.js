@@ -80,7 +80,7 @@ const Login = async (req, res) => {
                 return res.status(401).json({ message: "Invalid email or password", success: false });
             }
 
-            const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+            const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET);
 
             const userData = {
                 id: user.id,
@@ -134,7 +134,7 @@ const GoogleLogin = async (req, res) => {
                             created_at: user.created_at,
                         };
 
-                        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+                        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET);
                         return res.status(201).json({ message: 'Account created', success: true, token, user });
                     }
                 );
@@ -148,7 +148,7 @@ const GoogleLogin = async (req, res) => {
                     );
                 }
 
-                const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+                const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET);
                 return res.status(200).json({
                     message: 'Login successful',
                     success: true,
@@ -163,75 +163,72 @@ const GoogleLogin = async (req, res) => {
     }
 };
 
-const FacebookLogin = async (req, res) => {
-    const { accessToken } = req.body;
+const SetPassword = (req, res) => {
+    const { userId, password } = req.body;
 
-    if (!accessToken) {
-        return res.status(400).json({ message: 'Access token is required', success: false });
+    if (!password) {
+        return res.status(400).json({ message: "Password is required", success: false });
+    }
+
+    db.query("SELECT password FROM users WHERE id = ?", [userId], async (err, results) => {
+        if (err) {
+            return res.status(500).json({ message: "Database error", success: false });
+        }
+
+        if (results.length === 0) {
+            return res.status(404).json({ message: "User not found", success: false });
+        }
+
+        try {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            db.query("UPDATE users SET password = ? WHERE id = ?", [hashedPassword, userId],
+                (updateErr, updateResults) => {
+                    if (updateErr) {
+                        return res.status(500).json({ message: "Database error", success: false });
+                    }
+
+                    if (updateResults.affectedRows === 0) {
+                        return res.status(404).json({ message: "User not found", success: false });
+                    }
+
+                    return res.status(200).json({ message: "Password updated successfully", success: true });
+                }
+            );
+        } catch (error) {
+            return res.status(500).json({ message: "Error processing password", success: false });
+        }
+    });
+};
+
+const UpdateProfile = (req, res) => {
+    const { userId, firstName, lastName, email } = req.body;
+    console.log("UpdateProfile called with:", { userId, firstName, lastName, email });
+
+    if (!userId) {
+        return res.status(400).json({ message: "User ID is required", success: false });
+    }
+
+    if (!firstName && !lastName && !email) {
+        return res.status(400).json({ message: "At least one field is required", success: false });
     }
 
     try {
-        const fbRes = await fetch(
-            `https://graph.facebook.com/me?fields=id,first_name,last_name,email&access_token=${accessToken}`
-        );
-        const fbData = await fbRes.json();
-
-        if (fbData.error) {
-            return res.status(401).json({ message: 'Invalid Facebook token', success: false });
-        }
-
-        const { id: facebookId, first_name, last_name, email } = fbData;
-
-        if (!email) {
-            return res.status(400).json({
-                message: 'Email permission not granted. Please allow email access.',
-                success: false
-            });
-        }
-
-        db.query('SELECT * FROM users WHERE email = ?', [email], async (err, results) => {
-            if (err) return res.status(500).json({ message: 'Database error', success: false });
-
-            let user;
-
-            if (results.length === 0) {
-                db.query(
-                    'INSERT INTO users (firstname, lastname, email, facebook_id, is_active) VALUES (?, ?, ?, ?, 1)',
-                    [first_name, last_name || '', email, facebookId],
-                    (insertErr, insertResult) => {
-                        if (insertErr) {
-                            return res.status(500).json({ message: 'Failed to create user', success: false });
-                        }
-
-                        user = {
-                            id: insertResult.insertId,
-                            firstname: first_name,
-                            lastname: last_name || '',
-                            email,
-                            created_at: user.created_at,
-                        };
-
-                        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-                        return res.status(201).json({ message: 'Account created', success: true, token, user });
-                    }
-                );
-            } else {
-                user = results[0];
-
-                if (user.is_active === 0) {
-                    return res.status(403).json({ message: 'Account is inactive', success: false });
+        db.query(`UPDATE users SET firstname = ?, lastname = ?, email = ? WHERE id = ?`,
+            [firstName, lastName, email, userId],
+            (err, results) => {
+                if (err) {
+                    console.log("Database error:", err);
+                    return res.status(500).json({ message: "Database error", success: false });
                 }
-
-                if (!user.facebook_id) {
-                    db.query('UPDATE users SET facebook_id = ? WHERE id = ?', [facebookId, user.id], () => { });
+                if (results.affectedRows === 0) {
+                    return res.status(404).json({ message: "User not found", success: false });
                 }
-
-                const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-                return res.status(200).json({ message: 'Login successful', success: true, token, user });
+                return res.status(200).json({ message: "Profile updated successfully", success: true });
             }
-        });
+        );
     } catch (error) {
-        return res.status(500).json({ message: 'Internal server error', success: false });
+        console.log("Internal server error:", error);
+        return res.status(500).json({ message: "Internal server error", success: false });
     }
 };
 
@@ -279,56 +276,16 @@ const UpdateSettings = (req, res) => {
     );
 };
 
-const SetPassword = (req, res) => {
-    const { userId, password } = req.body;
-
-    if (!password) {
-        return res.status(400).json({ message: "Password is required", success: false });
-    }
-
-    db.query("SELECT password FROM users WHERE id = ?", [userId], async (err, results) => {
-        if (err) {
-            return res.status(500).json({ message: "Database error", success: false });
-        }
-
-        if (results.length === 0) {
-            return res.status(404).json({ message: "User not found", success: false });
-        }
-
-        try {
-            const hashedPassword = await bcrypt.hash(password, 10);
-            db.query("UPDATE users SET password = ? WHERE id = ?", [hashedPassword, userId],
-                (updateErr, updateResults) => {
-                    if (updateErr) {
-                        return res.status(500).json({ message: "Database error", success: false });
-                    }
-
-                    if (updateResults.affectedRows === 0) {
-                        return res.status(404).json({ message: "User not found", success: false });
-                    }
-
-                    return res.status(200).json({ message: "Password updated successfully", success: true });
-                }
-            );
-        } catch (error) {
-            return res.status(500).json({ message: "Error processing password", success: false });
-        }
-    });
-};
-
 const DeleteAccount = (req, res) => {
     const { userId } = req.body;
-    console.log("DeleteAccount called with userId:", userId);
 
     if (!userId) {
         return res.status(400).json({ message: "User ID is required", success: false });
     }
 
     try {
-        // Step 1: Check if user exists
         db.query("SELECT id FROM users WHERE id = ?", [userId], (checkErr, checkResults) => {
             if (checkErr) {
-                console.log("error check:", checkErr);
                 return res.status(500).json({ message: "Database error", success: false });
             }
 
@@ -336,24 +293,18 @@ const DeleteAccount = (req, res) => {
                 return res.status(404).json({ message: "User not found", success: false });
             }
 
-            // Step 2: Delete from owed table
             db.query("DELETE FROM owed WHERE user_id = ?", [userId], (owedErr) => {
                 if (owedErr) {
-                    console.log("error owed:", owedErr);
                     return res.status(500).json({ message: "Failed to delete owed data", success: false });
                 }
 
-                // Step 3: Delete from loaned table
                 db.query("DELETE FROM loaned WHERE user_id = ?", [userId], (loanedErr) => {
                     if (loanedErr) {
-                        console.log("error loaned:", loanedErr);
                         return res.status(500).json({ message: "Failed to delete loaned data", success: false });
                     }
 
-                    // Step 4: Delete user
                     db.query("DELETE FROM users WHERE id = ?", [userId], (deleteErr, deleteResults) => {
                         if (deleteErr) {
-                            console.log("error delete:", deleteErr);
                             return res.status(500).json({ message: "Failed to delete account", success: false });
                         }
 
@@ -366,9 +317,8 @@ const DeleteAccount = (req, res) => {
             });
         });
     } catch (error) {
-        console.log("error catch:", error);
         return res.status(500).json({ message: "Internal server error", success: false });
     };
 };
 
-    export { Registration, Login, GoogleLogin, FacebookLogin, SetPassword, UpdateSettings, DeleteAccount };
+export { Registration, Login, GoogleLogin, SetPassword, UpdateProfile, UpdateSettings, DeleteAccount };
