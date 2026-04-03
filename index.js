@@ -33,6 +33,7 @@ app.use('/api', ContactsRoute);
 
 app.get('/', (req, res) => {
     res.send('Hello Debtors!');
+    consolre.log("Received request to root endpoint");
 });
 
 app.listen(process.env.PORT || 3000, '0.0.0.0', () => {
