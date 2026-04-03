@@ -1,5 +1,5 @@
 import express from 'express';
-import DeleteContact from '../controllers/Contactcontroller.js';
+import DeleteContact from '../controllers/ContactController';
 
 const ContactRoute = express.Router();
 
