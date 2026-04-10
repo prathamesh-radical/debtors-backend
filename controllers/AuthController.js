@@ -98,68 +98,82 @@ const Login = async (req, res) => {
     }
 };
 
+// Google login logic ko do parts mein split karein
 const GoogleLogin = async (req, res) => {
     const { idToken } = req.body;
 
-    if (!idToken) {
-        return res.status(400).json({ message: 'ID token is required', success: false });
-    }
-
     try {
-        const ticket = await googleClient.verifyIdToken({ idToken, audience: process.env.GOOGLE_WEB_CLIENT_ID });
+        const ticket = await googleClient.verifyIdToken({ 
+            idToken, 
+            audience: process.env.GOOGLE_WEB_CLIENT_ID 
+        });
 
         const payload = ticket.getPayload();
         const { email, name, picture, sub: googleId } = payload;
-        const [firstName, ...lastNameParts] = name.split(' ');
-        const lastName = lastNameParts.join(' ');
 
-        db.query('SELECT * FROM users WHERE email = ?', [email], async (err, results) => {
+        // DB mein check karein
+        db.query('SELECT * FROM users WHERE email = ?', [email], (err, results) => {
             if (err) return res.status(500).json({ message: 'Database error', success: false });
 
-            if (results.length === 0) {
-                db.query(
-                    'INSERT INTO users (firstname, lastname, email, profile_url, google_id) VALUES (?, ?, ?, ?, ?)',
-                    [firstName, lastName, email, picture, googleId],
-                    (insertErr, insertResult) => {
-                        if (insertErr) {
-                            return res.status(500).json({ message: 'Failed to create user', success: false });
-                        }
-
-                        const user = {
-                            id: insertResult.insertId,
-                            firstname: firstName,
-                            lastname: lastName,
-                            profile_url: picture,
-                            email,
-                            created_at: user.created_at,
-                        };
-
-                        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET);
-                        return res.status(201).json({ message: 'Account created', success: true, token, user });
-                    }
-                );
-            } else {
+            if (results.length > 0) {
+                // CASE 1: User pehle se hai -> Seedha Login karwao
                 const user = results[0];
-
-                if (!user.profile_url) {
-                    db.query(
-                        'UPDATE users SET profile_url = ?, google_id = ? WHERE id = ?',
-                        [picture, googleId, user.id]
-                    );
-                }
-
                 const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '3650d' });
                 return res.status(200).json({
                     message: 'Login successful',
                     success: true,
+                    isNewUser: false, // Flag jo frontend ko batayega ki modal nahi kholna hai
                     token,
-                    user: { ...user, profile_url: picture }
+                    user
+                });
+            } else {
+                // CASE 2: Naya User hai -> DB mein entry MAT karo, sirf data wapas bhejo
+                const [firstName, ...lastNameParts] = name.split(' ');
+                return res.status(200).json({
+                    message: 'Google verified, password required',
+                    success: true,
+                    isNewUser: true, // Frontend ab modal kholega
+                    userData: {
+                        firstname: firstName,
+                        lastname: lastNameParts.join(' '),
+                        email,
+                        profile_url: picture,
+                        google_id: googleId
+                    }
                 });
             }
         });
-
     } catch (error) {
         return res.status(401).json({ message: 'Invalid Google token', success: false });
+    }
+};
+
+// Naya Controller function jo Google data + Password ko ek saath register karega
+const RegisterGoogleUser = async (req, res) => {
+    const { firstname, lastname, email, password, profile_url, google_id } = req.body;
+
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        db.query(
+            'INSERT INTO users (firstname, lastname, email, password, profile_url, google_id) VALUES (?, ?, ?, ?, ?, ?)',
+            [firstname, lastname, email, hashedPassword, profile_url, google_id],
+            (err, result) => {
+                if (err) return res.status(500).json({ message: 'Failed to create user', success: false });
+
+                const userId = result.insertId;
+                const token = jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: '3650d' });
+
+                return res.status(201).json({
+                    message: 'Account created successfully',
+                    success: true,
+                    token,
+                    user: { id: userId, firstname, lastname, email, profile_url }
+                });
+            }
+        );
+    } catch (error) {
+        return res.status(500).json({ message: 'Internal server error', success: false });
     }
 };
 
@@ -343,4 +357,6 @@ const DeleteAccount = (req, res) => {
     };
 };
 
-export { Registration, Login, GoogleLogin, SetPassword, UpdateProfile, UpdateSettings, VerifyPassword, DeleteAccount };
+export {
+    Registration, Login, GoogleLogin, RegisterGoogleUser, SetPassword, UpdateProfile, UpdateSettings, VerifyPassword, DeleteAccount
+};
