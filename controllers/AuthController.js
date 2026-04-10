@@ -202,7 +202,6 @@ const SetPassword = (req, res) => {
 
 const UpdateProfile = (req, res) => {
     const { userId, firstName, lastName, email } = req.body;
-    console.log("UpdateProfile called with:", { userId, firstName, lastName, email });
 
     if (!userId) {
         return res.status(400).json({ message: "User ID is required", success: false });
@@ -217,7 +216,6 @@ const UpdateProfile = (req, res) => {
             [firstName, lastName, email, userId],
             (err, results) => {
                 if (err) {
-                    console.log("Database error:", err);
                     return res.status(500).json({ message: "Database error", success: false });
                 }
                 if (results.affectedRows === 0) {
@@ -227,7 +225,6 @@ const UpdateProfile = (req, res) => {
             }
         );
     } catch (error) {
-        console.log("Internal server error:", error);
         return res.status(500).json({ message: "Internal server error", success: false });
     }
 };
@@ -261,19 +258,45 @@ const UpdateSettings = (req, res) => {
 
     values.push(userId);
 
-    db.query(
-        `UPDATE users SET ${fields.join(", ")} WHERE id = ?`,
-        values,
-        (err, results) => {
-            if (err) {
-                return res.status(500).json({ message: "Database error", success: false });
-            }
-            if (results.affectedRows === 0) {
-                return res.status(404).json({ message: "User not found", success: false });
-            }
-            return res.status(200).json({ message: "Settings updated successfully", success: true });
+    db.query(`UPDATE users SET ${fields.join(", ")} WHERE id = ?`, values, (err, results) => {
+        if (err) {
+            return res.status(500).json({ message: "Database error", success: false });
         }
-    );
+        if (results.affectedRows === 0) {
+            return res.status(404).json({ message: "User not found", success: false });
+        }
+        return res.status(200).json({ message: "Settings updated successfully", success: true });
+    });
+};
+
+const VerifyPassword = async (req, res) => {
+    const { userId, password } = req.body;
+
+    if (!userId || !password) {
+        return res.status(400).json({ message: "UserId and password are required", success: false });
+    }
+
+    try {
+        db.query("SELECT password FROM users WHERE id = ?", [userId], async (err, results) => {
+            if (err) return res.status(500).json({ message: "Database error", success: false });
+            if (results.length === 0) return res.status(404).json({ message: "User not found", success: false });
+
+            const user = results[0];
+
+            if (!user.password) {
+                return res.status(400).json({ message: "No password set for this account", success: false });
+            }
+
+            const isMatch = await bcrypt.compare(password, user.password);
+            if (!isMatch) {
+                return res.status(401).json({ message: "Incorrect password", success: false });
+            }
+
+            return res.status(200).json({ message: "Password verified", success: true });
+        });
+    } catch (error) {
+        return res.status(500).json({ message: "Internal server error", success: false });
+    }
 };
 
 const DeleteAccount = (req, res) => {
@@ -309,8 +332,7 @@ const DeleteAccount = (req, res) => {
                         }
 
                         return res.status(200).json({
-                            message: "Account and related data deleted successfully",
-                            success: true
+                            message: "Account and related data deleted successfully", success: true
                         });
                     });
                 });
@@ -321,4 +343,4 @@ const DeleteAccount = (req, res) => {
     };
 };
 
-export { Registration, Login, GoogleLogin, SetPassword, UpdateProfile, UpdateSettings, DeleteAccount };
+export { Registration, Login, GoogleLogin, SetPassword, UpdateProfile, UpdateSettings, VerifyPassword, DeleteAccount };

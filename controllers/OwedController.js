@@ -1,7 +1,7 @@
 import db from "../db/DbConnect.js";
 
 const CreateOwed = async (req, res) => {
-    const { user_id, amount, creditor_name, mobile_number, from_date, due_date, payment_option, note, type_of_debt, contact_id } = req.body;
+    const { user_id, amount, creditor_name, mobile_number, from_date, due_date, payment_option, note, contact_id } = req.body;
 
     if(!user_id) {
         return res.status(400).json({ message: 'User ID is required', success: false });
@@ -11,13 +11,13 @@ const CreateOwed = async (req, res) => {
         const sql = `
             INSERT INTO owed (
             user_id, amount, creditor_name, mobile_number, from_date, due_date,
-            payment_option, note, type_of_debt, contact_id
+            payment_option, note, contact_id
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         db.query(
             sql,
-            [user_id, amount, creditor_name, mobile_number, from_date, due_date || null, payment_option, note || null, type_of_debt, contact_id],
+            [user_id, amount, creditor_name, mobile_number, from_date, due_date || null, payment_option, note || null, contact_id],
             (err, results) => {
                 if (err) {
                     return res.status(500).json({ message: "Database error", success: false });

@@ -22,13 +22,14 @@ const GetOwedLoanedByContactId = (req, res) => {
     }
 
     const combinedQuery = `
-        SELECT 'owed' AS type, id, user_id, contact_id, amount, creditor_name, from_date, due_date, payment_option, note, type_of_debt 
+        SELECT 'owed' AS type, id, user_id, contact_id, amount, creditor_name, from_date, due_date, payment_option, note, created_at, updated_at 
         FROM owed 
         WHERE contact_id = ? AND user_id = ?
         UNION ALL
-        SELECT 'loaned' AS type, id, user_id, contact_id, amount, creditor_name, from_date, due_date, payment_option, note, type_of_debt 
+        SELECT 'loaned' AS type, id, user_id, contact_id, amount, creditor_name, from_date, due_date, payment_option, note, created_at, updated_at 
         FROM loaned 
         WHERE contact_id = ? AND user_id = ?
+        ORDER BY created_at DESC
     `;
 
     db.query(combinedQuery, [contact_id, user_id, contact_id, user_id], (err, results) => {
@@ -47,13 +48,14 @@ const GetAllContatcs = (req, res) => {
     }
 
     const combinedQuery = `
-        SELECT 'owed' AS type, id, user_id, contact_id, amount, creditor_name, mobile_number, from_date, due_date, payment_option, note, type_of_debt 
+        SELECT 'owed' AS type, id, user_id, contact_id, amount, creditor_name, mobile_number, from_date, due_date, payment_option, note, created_at, updated_at
         FROM owed 
         WHERE user_id = ?
         UNION ALL
-        SELECT 'loaned' AS type, id, user_id, contact_id, amount, creditor_name, mobile_number, from_date, due_date, payment_option, note, type_of_debt 
+        SELECT 'loaned' AS type, id, user_id, contact_id, amount, creditor_name, mobile_number, from_date, due_date, payment_option, note, created_at, updated_at
         FROM loaned 
         WHERE user_id = ?
+        ORDER BY created_at DESC
     `;
 
     db.query(combinedQuery, [user_id, user_id], (err, results) => {
@@ -77,4 +79,3 @@ const GetAllContatcs = (req, res) => {
 }
 
 export { GetUsers, GetOwedLoanedByContactId, GetAllContatcs };
-
