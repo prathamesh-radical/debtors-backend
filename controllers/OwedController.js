@@ -10,9 +10,9 @@ const CreateOwed = async (req, res) => {
     try {
         const sql = `
             INSERT INTO owed (
-            user_id, amount, creditor_name, mobile_number, from_date, due_date,
-            payment_option, note, contact_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                user_id, amount, creditor_name, mobile_number, from_date, due_date,
+                payment_option, note, contact_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         db.query(
@@ -31,14 +31,12 @@ const CreateOwed = async (req, res) => {
 
                     return res.status(201).json({ message: "Owed added successfully and entries updated", success: true });
                 });
-
             }
         );
     } catch (error) {
         res.status(500).json({ message: 'Internal server error', success: false });
     }
 };
-
 
 const GetOwedData = async (req, res) => {
     const { userId } = req.params;
