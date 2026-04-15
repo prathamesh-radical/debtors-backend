@@ -8,6 +8,12 @@ const CreateLoaned = async (req, res) => {
         return res.status(400).json({ message: 'User ID is required', success: false });
     }
 
+    let finalFromDate = from_date;
+    if (from_date && from_date.length === 10) {
+        const currentTime = new Date().toTimeString().split(' ')[0];
+        finalFromDate = `${from_date} ${currentTime}`;
+    }
+
     try {
         const sql = `
             INSERT INTO loaned (
@@ -18,7 +24,7 @@ const CreateLoaned = async (req, res) => {
 
         db.query(
             sql,
-            [user_id, amount, creditor_name, mobile_number, from_date, due_date || null, payment_option, note || null, contact_id],
+            [user_id, amount, creditor_name, mobile_number, finalFromDate, due_date || null, payment_option, note || null, contact_id],
             (err, results) => {
                 if (err) {
                     return res.status(500).json({ message: "Database error", success: false });
