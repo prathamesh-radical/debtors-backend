@@ -89,7 +89,7 @@ const Login = async (req, res) => {
                 email: user.email,
                 profile_url: user.profile_url,
                 created_at: user.created_at,
-                is_premium:user.is_premium
+                is_premium: user.is_premium
             };
 
             return res.status(200).json({ message: "Login successful", success: true, token, user: userData });
@@ -104,9 +104,9 @@ const GoogleLogin = async (req, res) => {
     const { idToken } = req.body;
 
     try {
-        const ticket = await googleClient.verifyIdToken({ 
-            idToken, 
-            audience: process.env.GOOGLE_WEB_CLIENT_ID 
+        const ticket = await googleClient.verifyIdToken({
+            idToken,
+            audience: process.env.GOOGLE_WEB_CLIENT_ID
         });
 
         const payload = ticket.getPayload();
@@ -140,7 +140,7 @@ const GoogleLogin = async (req, res) => {
                         email,
                         profile_url: picture,
                         google_id: googleId,
-                        is_premium:user.is_premium
+                        is_premium: user.is_premium
                     }
                 });
             }
@@ -156,7 +156,7 @@ const RegisterGoogleUser = async (req, res) => {
 
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
-        
+
         db.query(
             'INSERT INTO users (firstname, lastname, email, password, profile_url, google_id) VALUES (?, ?, ?, ?, ?, ?)',
             [firstname, lastname, email, hashedPassword, profile_url, google_id],
@@ -360,36 +360,23 @@ const DeleteAccount = (req, res) => {
 };
 
 const UpdatePremiumStatus = (req, res) => {
-
     const { userId, isPremium } = req.body;
-
+    
     if (!userId) {
-        return res.status(400).json({
-            success: false,
-            message: "User id required"
-        });
+        return res.status(400).json({ success: false, message: "User id required" });
     }
 
-    db.query(
-        "UPDATE users SET is_premium=? WHERE id=?",
-        [isPremium ? 1 : 0, userId],
-        (err,result)=>{
-
-            if(err){
-                return res.status(500).json({
-                    success:false,
-                    message:"Database error"
-                });
+    try {
+        db.query("UPDATE users SET is_premium=? WHERE id=?", [isPremium ? 1 : 0, userId], (err, result) => {
+            if (err) {
+                return res.status(500).json({ success: false, message: "Database error" });
             }
 
-            return res.status(200).json({
-                success:true,
-                message:"Premium updated"
-            });
-
-        }
-    );
-
+            return res.status(200).json({ success: true, message: "Premium updated" });
+        });
+    } catch (error) {
+        return res.status(200).json({ success: true, message: "Internal server error" });
+    }
 }
 
 export {
