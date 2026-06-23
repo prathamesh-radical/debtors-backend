@@ -89,6 +89,7 @@ const Login = async (req, res) => {
                 email: user.email,
                 profile_url: user.profile_url,
                 created_at: user.created_at,
+                is_premium:user.is_premium
             };
 
             return res.status(200).json({ message: "Login successful", success: true, token, user: userData });
@@ -138,7 +139,8 @@ const GoogleLogin = async (req, res) => {
                         lastname: lastNameParts.join(' '),
                         email,
                         profile_url: picture,
-                        google_id: googleId
+                        google_id: googleId,
+                        is_premium:user.is_premium
                     }
                 });
             }
@@ -357,6 +359,39 @@ const DeleteAccount = (req, res) => {
     };
 };
 
+const UpdatePremiumStatus = (req, res) => {
+
+    const { userId, isPremium } = req.body;
+
+    if (!userId) {
+        return res.status(400).json({
+            success: false,
+            message: "User id required"
+        });
+    }
+
+    db.query(
+        "UPDATE users SET is_premium=? WHERE id=?",
+        [isPremium ? 1 : 0, userId],
+        (err,result)=>{
+
+            if(err){
+                return res.status(500).json({
+                    success:false,
+                    message:"Database error"
+                });
+            }
+
+            return res.status(200).json({
+                success:true,
+                message:"Premium updated"
+            });
+
+        }
+    );
+
+}
+
 export {
-    Registration, Login, GoogleLogin, RegisterGoogleUser, SetPassword, UpdateProfile, UpdateSettings, VerifyPassword, DeleteAccount
+    Registration, Login, GoogleLogin, RegisterGoogleUser, SetPassword, UpdateProfile, UpdateSettings, VerifyPassword, DeleteAccount, UpdatePremiumStatus
 };

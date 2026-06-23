@@ -1,6 +1,6 @@
 import express from 'express';
 import {
-    DeleteAccount, GoogleLogin, Login, RegisterGoogleUser, Registration, SetPassword, UpdateProfile, UpdateSettings,
+    DeleteAccount, GoogleLogin, Login, RegisterGoogleUser, Registration, SetPassword, UpdatePremiumStatus, UpdateProfile, UpdateSettings,
     VerifyPassword
 } from '../controllers/AuthController.js';
 
@@ -16,5 +16,6 @@ AuthRoute.put("/update-profile", UpdateProfile);
 AuthRoute.put("/update-password", SetPassword);
 AuthRoute.post("/verify-password", VerifyPassword);
 AuthRoute.delete("/delete-account", DeleteAccount);
+AuthRoute.put("/update-premium", UpdatePremiumStatus);
 
 export default AuthRoute;
