@@ -122,4 +122,69 @@ const DeleteLoaned = async (req, res) => {
     }
 }
 
-export { CreateLoaned, GetLoanedData, GetSingleLoaned, UpdateLoaned, DeleteLoaned };
+const BulkDeleteLoaned = async (req, res) => {
+    const { loanedIds, userId } = req.body;
+
+    if (!loanedIds || !Array.isArray(loanedIds) || loanedIds.length === 0 || !userId) {
+        return res.status(400).json({
+            message: "Loaned IDs (array) and User ID are required",
+            success: false
+        });
+    }
+
+    try {
+        let successCount = 0;
+        let failedIds = [];
+
+        for (const loanedId of loanedIds) {
+            try {
+                const [existingLoan] = await db.promise().query(
+                    'SELECT * FROM loaned WHERE id = ? AND user_id = ?',
+                    [loanedId, userId]
+                );
+
+                if (!existingLoan || existingLoan.length === 0) {
+                    failedIds.push({ id: loanedId, reason: 'Not found' });
+                    continue;
+                }
+
+                await db.promise().query(
+                    'DELETE FROM loaned WHERE id = ? AND user_id = ?',
+                    [loanedId, userId]
+                );
+
+                successCount++;
+            } catch (itemErr) {
+                failedIds.push({ id: loanedId, reason: itemErr.message });
+            }
+        }
+
+        if (successCount > 0) {
+            await db.promise().query(
+                'UPDATE users SET entries = entries - ? WHERE id = ?',
+                [successCount, userId]
+            );
+        }
+
+        const message = failedIds.length === 0
+            ? `${successCount} loaned transaction${successCount !== 1 ? 's' : ''} deleted successfully`
+            : `Deleted ${successCount}, Failed ${failedIds.length}`;
+
+        return res.status(failedIds.length === 0 ? 200 : 207).json({
+            message,
+            success: failedIds.length === 0,
+            data: {
+                successCount,
+                failedCount: failedIds.length,
+                failedIds
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: "Internal server error",
+            success: false
+        });
+    }
+};
+
+export { CreateLoaned, GetLoanedData, GetSingleLoaned, UpdateLoaned, DeleteLoaned, BulkDeleteLoaned };

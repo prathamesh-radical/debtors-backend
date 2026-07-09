@@ -116,4 +116,69 @@ const DeleteOwed = async (req, res) => {
     }
 }
 
-export { CreateOwed, GetOwedData, GetSingleOwed, UpdateOwed, DeleteOwed };
+const BulkDeleteOwed = async (req, res) => {
+    const { owedIds, userId } = req.body;
+
+    if (!owedIds || !Array.isArray(owedIds) || owedIds.length === 0 || !userId) {
+        return res.status(400).json({
+            message: "Owed IDs (array) and User ID are required",
+            success: false
+        });
+    }
+
+    try {
+        let successCount = 0;
+        let failedIds = [];
+
+        for (const owedId of owedIds) {
+            try {
+                const [existingOwe] = await db.promise().query(
+                    'SELECT * FROM owed WHERE id = ? AND user_id = ?',
+                    [owedId, userId]
+                );
+
+                if (!existingOwe || existingOwe.length === 0) {
+                    failedIds.push({ id: owedId, reason: 'Not found' });
+                    continue;
+                }
+
+                await db.promise().query(
+                    'DELETE FROM owed WHERE id = ? AND user_id = ?',
+                    [owedId, userId]
+                );
+
+                successCount++;
+            } catch (itemErr) {
+                failedIds.push({ id: owedId, reason: itemErr.message });
+            }
+        }
+
+        if (successCount > 0) {
+            await db.promise().query(
+                'UPDATE users SET entries = entries - ? WHERE id = ?',
+                [successCount, userId]
+            );
+        }
+
+        const message = failedIds.length === 0
+            ? `${successCount} owed transaction${successCount !== 1 ? 's' : ''} deleted successfully`
+            : `Deleted ${successCount}, Failed ${failedIds.length}`;
+
+        return res.status(failedIds.length === 0 ? 200 : 207).json({
+            message,
+            success: failedIds.length === 0,
+            data: {
+                successCount,
+                failedCount: failedIds.length,
+                failedIds
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: "Internal server error",
+            success: false
+        });
+    }
+};
+
+export { CreateOwed, GetOwedData, GetSingleOwed, UpdateOwed, DeleteOwed, BulkDeleteOwed };

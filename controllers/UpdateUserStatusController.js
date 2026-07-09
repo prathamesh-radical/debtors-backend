@@ -123,7 +123,6 @@ function performDeletion(numericContactId, userId, res, contactName = null) {
 
         db.query(deleteLoanedQuery, [userId, numericContactId], (loanedErr, loanedResult) => {
             if (loanedErr) {
-                console.error("❌ Error deleting loaned transactions:", loanedErr);
                 return res.status(500).json({
                     message: "Failed to delete loaned transactions",
                     success: false
@@ -139,7 +138,6 @@ function performDeletion(numericContactId, userId, res, contactName = null) {
 
             db.query(deleteOwedQuery, [userId, numericContactId], (owedErr, owedResult) => {
                 if (owedErr) {
-                    console.error("❌ Error deleting owed transactions:", owedErr);
                     return res.status(500).json({
                         message: "Failed to delete owed transactions",
                         success: false
@@ -157,7 +155,6 @@ function performDeletion(numericContactId, userId, res, contactName = null) {
 
                 db.query(updateEntriesQuery, [totalDeleted, userId], (updateErr) => {
                     if (updateErr) {
-                        console.error("❌ Error updating entries count:", updateErr);
                         return res.status(500).json({
                             message: "Transactions deleted but failed to update entries count",
                             success: false
@@ -181,5 +178,84 @@ function performDeletion(numericContactId, userId, res, contactName = null) {
     });
 }
 
-export { UpdateUserStatus, UpdateReport, DeleteContact };
+const BulkDeleteContacts = async (req, res) => {
+    const { contactIds, userId } = req.body;
 
+    if (!contactIds || !Array.isArray(contactIds) || contactIds.length === 0 || !userId) {
+        return res.status(400).json({ 
+            message: "Contact IDs (array), and User ID are required", 
+            success: false 
+        });
+    }
+
+    try {
+        let successCount = 0;
+        let failedContacts = [];
+
+        for (const contactId of contactIds) {
+            try {
+                let numericContactId = contactId;
+
+                if (isNaN(contactId)) {
+                    const [results] = await db.promise().query(`
+                        SELECT DISTINCT contact_id FROM loaned 
+                        WHERE user_id = ? AND creditor_name = ?
+                        UNION
+                        SELECT DISTINCT contact_id FROM owed 
+                        WHERE user_id = ? AND creditor_name = ?
+                        LIMIT 1
+                    `, [userId, contactId, userId, contactId]);
+
+                    if (!results || results.length === 0) {
+                        failedContacts.push({ contactId, reason: 'Contact not found' });
+                        continue;
+                    }
+                    numericContactId = results[0].contact_id;
+                }
+
+                await db.promise().query(
+                    "DELETE FROM loaned WHERE user_id = ? AND contact_id = ?",
+                    [userId, numericContactId]
+                );
+
+                await db.promise().query(
+                    "DELETE FROM owed WHERE user_id = ? AND contact_id = ?",
+                    [userId, numericContactId]
+                );
+
+                successCount++;
+            } catch (itemErr) {
+                failedContacts.push({ contactId, reason: itemErr.message });
+            }
+        }
+
+        if (successCount > 0) {
+            const totalDeleted = successCount;
+            await db.promise().query(
+                "UPDATE users SET entries = entries - ? WHERE id = ?",
+                [totalDeleted, userId]
+            );
+        }
+
+        const message = failedContacts.length === 0
+            ? `${successCount} contact${successCount !== 1 ? 's' : ''} deleted successfully`
+            : `Deleted ${successCount}, Failed ${failedContacts.length}`;
+
+        return res.status(failedContacts.length === 0 ? 200 : 207).json({
+            message,
+            success: failedContacts.length === 0,
+            data: {
+                successCount,
+                failedCount: failedContacts.length,
+                failedContacts
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: "Internal server error",
+            success: false
+        });
+    }
+};
+
+export { UpdateUserStatus, UpdateReport, DeleteContact, BulkDeleteContacts };
