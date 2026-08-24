@@ -109,7 +109,6 @@ function performDeletion(numericContactId, userId, res, contactName = null) {
         const totalTransactions = loanedCount + owedCount;
 
         if (totalTransactions === 0) {
-            console.warn("⚠️  No transactions found for numeric contact_id:", numericContactId);
             return res.status(404).json({
                 message: `Contact has no transactions`,
                 success: false

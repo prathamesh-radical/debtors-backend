@@ -9,14 +9,14 @@ dotenv.config();
 const googleClient = new OAuth2Client(process.env.GOOGLE_WEB_CLIENT_ID);
 
 const Registration = async (req, res) => {
-    const { firstname, lastname, email, password, confirmPassword } = req.body;
+    const { firstname, lastname, email, password, confirmPassword, currency, country } = req.body;
 
     const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (!emailPattern.test(email)) {
         return res.status(400).json({ message: "Please enter a valid email address.", success: false });
     }
 
-    if (!firstname || !lastname || !email || !password || !confirmPassword) {
+    if (!firstname || !lastname || !email || !password || !confirmPassword || !currency || !country) {
         return res.status(400).json({ message: "All fields are required", success: false });
     }
 
@@ -36,8 +36,8 @@ const Registration = async (req, res) => {
                 return res.status(400).json({ message: "User already exists with this email", success: false });
             } else {
                 db.query(
-                    "INSERT INTO users (firstname, lastname, email, password) VALUES (?, ?, ?, ?)",
-                    [firstname, lastname, email, hashedPassword],
+                    "INSERT INTO users (firstname, lastname, email, password, currency, country) VALUES (?, ?, ?, ?, ?, ?)",
+                    [firstname, lastname, email, hashedPassword, currency, country],
                     (err, result) => {
                         if (err) {
                             return res.status(500).json({ message: "Error while registering you", success: false });
@@ -99,7 +99,6 @@ const Login = async (req, res) => {
     }
 };
 
-// Google login logic ko do parts mein split karein
 const GoogleLogin = async (req, res) => {
     const { idToken } = req.body;
 
@@ -112,35 +111,33 @@ const GoogleLogin = async (req, res) => {
         const payload = ticket.getPayload();
         const { email, name, picture, sub: googleId } = payload;
 
-        // DB mein check karein
         db.query('SELECT * FROM users WHERE email = ?', [email], (err, results) => {
             if (err) return res.status(500).json({ message: 'Database error', success: false });
 
+            const user = results[0];
+
             if (results.length > 0) {
-                // CASE 1: User pehle se hai -> Seedha Login karwao
-                const user = results[0];
                 const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '3650d' });
                 return res.status(200).json({
                     message: 'Login successful',
                     success: true,
-                    isNewUser: false, // Flag jo frontend ko batayega ki modal nahi kholna hai
+                    isNewUser: false,
                     token,
                     user
                 });
             } else {
-                // CASE 2: Naya User hai -> DB mein entry MAT karo, sirf data wapas bhejo
                 const [firstName, ...lastNameParts] = name.split(' ');
                 return res.status(200).json({
                     message: 'Google verified, password required',
                     success: true,
-                    isNewUser: true, // Frontend ab modal kholega
+                    isNewUser: true,
                     userData: {
                         firstname: firstName,
                         lastname: lastNameParts.join(' '),
                         email,
                         profile_url: picture,
                         google_id: googleId,
-                        is_premium: user.is_premium
+                        is_premium: false
                     }
                 });
             }
@@ -150,18 +147,18 @@ const GoogleLogin = async (req, res) => {
     }
 };
 
-// Naya Controller function jo Google data + Password ko ek saath register karega
 const RegisterGoogleUser = async (req, res) => {
-    const { firstname, lastname, email, password, profile_url, google_id } = req.body;
-
+    const { firstname, lastname, email, password, profile_url, google_id, currency, country } = req.body;
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
 
         db.query(
-            'INSERT INTO users (firstname, lastname, email, password, profile_url, google_id) VALUES (?, ?, ?, ?, ?, ?)',
-            [firstname, lastname, email, hashedPassword, profile_url, google_id],
+            'INSERT INTO users (firstname, lastname, email, password, profile_url, google_id, currency, country) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [firstname, lastname, email, hashedPassword, profile_url, google_id, currency || 'USD', country || ''],
             (err, result) => {
-                if (err) return res.status(500).json({ message: 'Failed to create user', success: false });
+                if (err) {
+                    return res.status(500).json({ message: 'Failed to create user', success: false });
+                }
 
                 const userId = result.insertId;
                 const token = jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: '3650d' });
@@ -170,7 +167,15 @@ const RegisterGoogleUser = async (req, res) => {
                     message: 'Account created successfully',
                     success: true,
                     token,
-                    user: { id: userId, firstname, lastname, email, profile_url }
+                    user: { 
+                        id: userId, 
+                        firstname, 
+                        lastname, 
+                        email, 
+                        profile_url, 
+                        currency: currency || 'USD', 
+                        country: country || '' 
+                    }
                 });
             }
         );
@@ -197,7 +202,7 @@ const SetPassword = (req, res) => {
 
         try {
             const hashedPassword = await bcrypt.hash(password, 10);
-            db.query("UPDATE users SET password = ? WHERE id = ?", [hashedPassword, userId],
+            db.query("UPDATE users SET password = ?, WHERE id = ?", [hashedPassword, userId],
                 (updateErr, updateResults) => {
                     if (updateErr) {
                         return res.status(500).json({ message: "Database error", success: false });
@@ -361,7 +366,7 @@ const DeleteAccount = (req, res) => {
 
 const UpdatePremiumStatus = (req, res) => {
     const { userId, isPremium } = req.body;
-    
+
     if (!userId) {
         return res.status(400).json({ success: false, message: "User id required" });
     }
