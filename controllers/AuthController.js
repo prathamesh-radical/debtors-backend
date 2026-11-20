@@ -3,10 +3,36 @@ import bcrypt from "bcrypt";
 import dotenv from "dotenv";
 import db from "../db/DbConnect.js";
 import { OAuth2Client } from 'google-auth-library';
+import nodemailer from "nodemailer";
+import { randomInt } from "node:crypto";
 
 dotenv.config();
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_WEB_CLIENT_ID);
+let passwordResetTablePromise;
+
+const ensurePasswordResetTable = async () => {
+    if (!passwordResetTablePromise) {
+        passwordResetTablePromise = db.promise().query(`
+            CREATE TABLE IF NOT EXISTS password_reset_codes (
+                email VARCHAR(255) NOT NULL PRIMARY KEY,
+                code_hash VARCHAR(255) NOT NULL,
+                expires_at DATETIME NOT NULL,
+                verified_at DATETIME NULL,
+                attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB
+        `).catch((error) => {
+            console.log("error", error);
+            passwordResetTablePromise = null;
+            throw error;
+        });
+    }
+
+    await passwordResetTablePromise;
+};
+
+const normalizeEmail = (email) => typeof email === "string" ? email.trim().toLowerCase() : "";
 
 const Registration = async (req, res) => {
     const { firstname, lastname, email, password, confirmPassword, currency, country } = req.body;
@@ -167,14 +193,14 @@ const RegisterGoogleUser = async (req, res) => {
                     message: 'Account created successfully',
                     success: true,
                     token,
-                    user: { 
-                        id: userId, 
-                        firstname, 
-                        lastname, 
-                        email, 
-                        profile_url, 
-                        currency: currency || 'USD', 
-                        country: country || '' 
+                    user: {
+                        id: userId,
+                        firstname,
+                        lastname,
+                        email,
+                        profile_url,
+                        currency: currency || 'USD',
+                        country: country || ''
                     }
                 });
             }
@@ -320,6 +346,200 @@ const VerifyPassword = async (req, res) => {
     }
 };
 
+const ForgotPassword = async (req, res) => {
+    const email = normalizeEmail(req.body?.email);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ message: "Please enter a valid email address.", success: false });
+    }
+
+    const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD } = process.env;
+    if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASSWORD) {
+        console.error("Password reset email is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASSWORD.");
+        return res.status(503).json({ message: "We could not send a code right now. Please try again.", success: false });
+    }
+
+    try {
+        await ensurePasswordResetTable();
+        const [users] = await db.promise().query(
+            "SELECT id FROM users WHERE LOWER(email) = ? LIMIT 1",
+            [email]
+        );
+
+        if (users.length === 0) {
+            return res.status(200).json({
+                message: `If an account exists for ${email}, a verification code is on its way.`,
+                success: true
+            });
+        }
+
+        const code = String(randomInt(100000, 1000000));
+        const codeHash = await bcrypt.hash(code, 10);
+        await db.promise().query(
+            `INSERT INTO password_reset_codes (email, code_hash, expires_at, verified_at, attempts)
+             VALUES (?, ?, DATE_ADD(UTC_TIMESTAMP(), INTERVAL 10 MINUTE), NULL, 0)
+             ON DUPLICATE KEY UPDATE
+                code_hash = VALUES(code_hash),
+                expires_at = VALUES(expires_at),
+                verified_at = NULL,
+                attempts = 0`,
+            [email, codeHash]
+        );
+
+        const transporter = nodemailer.createTransport({
+            host: SMTP_HOST,
+            port: Number(SMTP_PORT),
+            secure: process.env.SMTP_SECURE === "true",
+            auth: { user: SMTP_USER, pass: SMTP_PASSWORD }
+        });
+
+        try {
+            await transporter.sendMail({
+                from: process.env.SMTP_FROM || SMTP_USER,
+                to: email,
+                subject: "Your Debtors password reset code",
+                text: `Your password reset verification code is ${code}. It expires in 10 minutes.`,
+                html: `<p>Your password reset verification code is <strong>${code}</strong>.</p><p>It expires in 10 minutes. If you did not request this, you can ignore this email.</p>`
+            });
+        } catch (mailError) {
+            console.log("mailError", mailError);
+            await db.promise().query(
+                "DELETE FROM password_reset_codes WHERE email = ? AND code_hash = ?",
+                [email, codeHash]
+            );
+            throw mailError;
+        }
+
+        return res.status(200).json({
+            message: `If an account exists for ${email}, a verification code is on its way.`,
+            success: true
+        });
+    } catch (error) {
+        console.log("Password reset request failed:", error);
+        return res.status(500).json({ message: "We could not send a code right now. Please try again.", success: false });
+    }
+};
+
+const VerifyPasswordResetCode = async (req, res) => {
+    const email = normalizeEmail(req.body?.email);
+    const { code } = req.body || {};
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^\d{6}$/.test(String(code || ""))) {
+        return res.status(400).json({ message: "A valid email address and 6-digit code are required.", success: false });
+    }
+
+    if (!process.env.JWT_SECRET) {
+        console.error("JWT_SECRET is not configured.");
+        return res.status(500).json({ message: "Unable to verify the code right now.", success: false });
+    }
+
+    try {
+        await ensurePasswordResetTable();
+        const [records] = await db.promise().query(
+            `SELECT code_hash FROM password_reset_codes
+             WHERE email = ? AND expires_at > UTC_TIMESTAMP() AND attempts < 5`,
+            [email]
+        );
+
+        if (records.length === 0 || !(await bcrypt.compare(String(code), records[0].code_hash))) {
+            if (records.length > 0) {
+                await db.promise().query(
+                    "UPDATE password_reset_codes SET attempts = attempts + 1 WHERE email = ? AND attempts < 5",
+                    [email]
+                );
+            }
+            return res.status(400).json({ message: "The verification code is invalid or has expired.", success: false });
+        }
+
+        const [users] = await db.promise().query(
+            "SELECT id FROM users WHERE LOWER(email) = ? LIMIT 1",
+            [email]
+        );
+        if (users.length === 0) {
+            return res.status(400).json({ message: "The verification code is invalid or has expired.", success: false });
+        }
+
+        await db.promise().query(
+            "UPDATE password_reset_codes SET verified_at = UTC_TIMESTAMP() WHERE email = ?",
+            [email]
+        );
+        const resetToken = jwt.sign(
+            { id: users[0].id, email, purpose: "password-reset" },
+            process.env.JWT_SECRET,
+            { expiresIn: "15m" }
+        );
+
+        return res.status(200).json({ message: "Verification code accepted.", success: true, resetToken });
+    } catch (error) {
+        console.log("Password reset code verification failed:", error);
+        return res.status(500).json({ message: "Unable to verify the code right now.", success: false });
+    }
+};
+
+const ResetPassword = async (req, res) => {
+    const { resetToken, password } = req.body || {};
+    if (typeof resetToken !== "string" || typeof password !== "string" || !password) {
+        return res.status(400).json({ message: "A reset token and new password are required.", success: false });
+    }
+
+    if (!process.env.JWT_SECRET) {
+        console.error("JWT_SECRET is not configured.");
+        return res.status(500).json({ message: "Unable to reset the password right now.", success: false });
+    }
+
+    let reset;
+    try {
+        reset = jwt.verify(resetToken, process.env.JWT_SECRET);
+    } catch (error) {
+        return res.status(401).json({ message: "The password reset session is invalid or has expired.", success: false });
+    }
+
+    if (reset.purpose !== "password-reset" || !reset.id || !reset.email) {
+        return res.status(401).json({ message: "The password reset session is invalid or has expired.", success: false });
+    }
+
+    let connection;
+    try {
+        await ensurePasswordResetTable();
+        connection = await db.promise().getConnection();
+        await connection.beginTransaction();
+
+        const [records] = await connection.query(
+            `SELECT email FROM password_reset_codes
+             WHERE email = ? AND verified_at IS NOT NULL AND expires_at > UTC_TIMESTAMP()
+             FOR UPDATE`,
+            [reset.email]
+        );
+        if (records.length === 0) {
+            await connection.rollback();
+            return res.status(401).json({ message: "The password reset session is invalid or has expired.", success: false });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const [updatedUser] = await connection.query(
+            "UPDATE users SET password = ? WHERE id = ?",
+            [hashedPassword, reset.id]
+        );
+        if (updatedUser.affectedRows === 0) {
+            await connection.rollback();
+            return res.status(404).json({ message: "User not found.", success: false });
+        }
+
+        await connection.query("DELETE FROM password_reset_codes WHERE email = ?", [reset.email]);
+        await connection.commit();
+        return res.status(200).json({ message: "Password reset successfully.", success: true });
+    } catch (error) {
+        console.log("Password reset failed:", error);
+        if (connection) {
+            await connection.rollback();
+        }
+        console.log("Password reset failed:", error);
+        return res.status(500).json({ message: "Unable to reset the password right now.", success: false });
+    } finally {
+        if (connection) {
+            connection.release();
+        }
+    }
+};
+
 const DeleteAccount = (req, res) => {
     const { userId } = req.body;
 
@@ -385,5 +605,6 @@ const UpdatePremiumStatus = (req, res) => {
 }
 
 export {
-    Registration, Login, GoogleLogin, RegisterGoogleUser, SetPassword, UpdateProfile, UpdateSettings, VerifyPassword, DeleteAccount, UpdatePremiumStatus
+    Registration, Login, GoogleLogin, RegisterGoogleUser, SetPassword, UpdateProfile, UpdateSettings, VerifyPassword,
+    ForgotPassword, VerifyPasswordResetCode, ResetPassword, DeleteAccount, UpdatePremiumStatus
 };
