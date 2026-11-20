@@ -353,10 +353,10 @@ const ForgotPassword = async (req, res) => {
     }
 
     const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD } = process.env;
-    if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASSWORD) {
-        console.error("Password reset email is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASSWORD.");
-        return res.status(503).json({ message: "We could not send a code right now. Please try again.", success: false });
-    }
+    // if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASSWORD) {
+    //     console.log("Password reset email is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASSWORD.");
+    //     return res.status(503).json({ message: "We could not send a code right now. Please try again.", success: false });
+    // }
 
     try {
         await ensurePasswordResetTable();
